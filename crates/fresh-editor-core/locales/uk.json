@@ -2272,13 +2272,13 @@
   "action.open_live_grep": "Live Grep (Find in Files)",
   "action.resume_live_grep": "Resume Live Grep",
   "action.live_grep_export_quickfix": "Export Live Grep results to Quickfix",
-  "action.toggle_utility_dock": "Toggle Utility Dock",
+  "action.toggle_utility_dock": "Перемкнути панель утиліт",
   "action.open_terminal_in_dock": "Open terminal in Utility Dock",
   "action.cycle_live_grep_provider": "Cycle Live Grep provider",
   "cmd.resume_live_grep": "Resume Live Grep",
   "cmd.resume_live_grep_desc": "Reopen Live Grep with prior query",
-  "cmd.toggle_utility_dock": "Toggle Utility Dock",
-  "cmd.toggle_utility_dock_desc": "Move focus to/from the shared bottom dock",
+  "cmd.toggle_utility_dock": "Перемкнути панель утиліт",
+  "cmd.toggle_utility_dock_desc": "Показати або сховати спільну нижню панель (діагностика, пошук і заміна, quickfix, …)",
   "cmd.open_terminal_in_dock": "Open Terminal in Utility Dock",
   "cmd.open_terminal_in_dock_desc": "Open a new terminal inside the dock",
   "cmd.workspace_trust": "Довіра робочій області…",
@@ -2422,5 +2422,8 @@
   "dialog.title.permission_denied": "Доступ заборонено",
   "dialog.title.name_conflict": "Конфлікт імен",
   "dialog.title.large_file": "Великий файл",
-  "dialog.title.go_to_line": "Перейти до рядка"
+  "dialog.title.go_to_line": "Перейти до рядка",
+  "action.focus_utility_dock": "Фокус на панель утиліт",
+  "cmd.focus_utility_dock": "Фокус на панель утиліт",
+  "cmd.focus_utility_dock_desc": "Перемістити фокус клавіатури на/зі спільної нижньої панелі (діагностика, пошук і заміна, quickfix, …)"
 }

@@ -133,6 +133,7 @@ In `config.json`, a keybinding takes the same `args` object next to its `"action
 | `focus_next_sidebar_section` | Focus next sidebar section |
 | `focus_prev_sidebar_section` | Focus previous sidebar section |
 | `focus_terminal` | Focus terminal |
+| `focus_utility_dock` | Focus Utility Dock |
 | `force_quit` | Quit editor (discard unsaved changes) |
 | `format_buffer` | Format buffer with configured formatter |
 | `goto_line` | Go to line number |

@@ -131,6 +131,14 @@ impl Editor {
         if !(sole_tab && has_other_editor_splits) {
             return false;
         }
+        let this_is_dock = self
+            .active_window()
+            .split_manager()
+            .leaf_role(split_id)
+            == Some(crate::view::split::SplitRole::UtilityDock);
+        if this_is_dock {
+            self.active_window_mut().saved_utility_dock = None;
+        }
         self.handle_close_split(split_id.into());
         true
     }
@@ -1121,7 +1129,15 @@ impl Editor {
             true
         } else {
             // There are other viewports of this buffer - just remove from this split's tabs
+            let this_is_dock = self
+                .active_window()
+                .split_manager()
+                .leaf_role(split_id)
+                == Some(crate::view::split::SplitRole::UtilityDock);
             if split_tabs.len() <= 1 {
+                if this_is_dock {
+                    self.active_window_mut().saved_utility_dock = None;
+                }
                 // This is the only tab in this split - close the split
                 self.handle_close_split(split_id.into());
                 return true;

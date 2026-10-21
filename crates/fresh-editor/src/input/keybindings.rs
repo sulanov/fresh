@@ -566,10 +566,10 @@ pub enum Action {
     OpenLiveGrep,
     /// Re-open Live Grep with the prior query and selection.
     ResumeLiveGrep,
-    /// Toggle focus on the Utility Dock. If the dock exists and is not
-    /// focused, focus it. If it is focused, return focus to the
-    /// previously active editor split.
+    /// Toggle visibility of the Utility Dock (hide if open, restore if hidden).
     ToggleUtilityDock,
+    /// Toggle focus between the Utility Dock and the editor splits.
+    FocusUtilityDock,
     /// Open a terminal inside the Utility Dock (creates the dock if
     /// absent; otherwise swaps the active dock buffer to a terminal).
     OpenTerminalInDock,
@@ -1148,6 +1148,7 @@ impl Action {
             "open_live_grep" => OpenLiveGrep,
             "resume_live_grep" => ResumeLiveGrep,
             "toggle_utility_dock" => ToggleUtilityDock,
+            "focus_utility_dock" => FocusUtilityDock,
             "open_terminal_in_dock" => OpenTerminalInDock,
             "cycle_live_grep_provider" => CycleLiveGrepProvider,
             "toggle_line_wrap" => ToggleLineWrap,
@@ -2252,6 +2253,7 @@ impl KeybindingResolver {
                 | Action::ResumeLiveGrep
                 | Action::CycleLiveGrepProvider
                 | Action::ToggleUtilityDock
+                | Action::FocusUtilityDock
                 | Action::OpenTerminalInDock
                 | Action::ToggleDockFocus
                 | Action::FocusNextSidebarSection
@@ -3194,6 +3196,7 @@ impl KeybindingResolver {
             Action::OpenLiveGrep => t!("action.open_live_grep"),
             Action::ResumeLiveGrep => t!("action.resume_live_grep"),
             Action::ToggleUtilityDock => t!("action.toggle_utility_dock"),
+            Action::FocusUtilityDock => t!("action.focus_utility_dock"),
             Action::OpenTerminalInDock => t!("action.open_terminal_in_dock"),
             Action::CycleLiveGrepProvider => t!("action.cycle_live_grep_provider"),
             Action::InspectThemeAtCursor => t!("action.inspect_theme_at_cursor"),

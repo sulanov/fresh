@@ -3774,6 +3774,7 @@ pub fn action_to_events(
         | Action::OpenLiveGrep
         | Action::ResumeLiveGrep
         | Action::ToggleUtilityDock
+        | Action::FocusUtilityDock
         | Action::OpenTerminalInDock
         | Action::CycleLiveGrepProvider
         | Action::ShowHelp

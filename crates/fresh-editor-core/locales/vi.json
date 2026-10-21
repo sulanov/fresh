@@ -2245,13 +2245,13 @@
   "action.open_live_grep": "Live Grep (Find in Files)",
   "action.resume_live_grep": "Resume Live Grep",
   "action.live_grep_export_quickfix": "Export Live Grep results to Quickfix",
-  "action.toggle_utility_dock": "Toggle Utility Dock",
+  "action.toggle_utility_dock": "Bật/tắt dock tiện ích",
   "action.open_terminal_in_dock": "Open terminal in Utility Dock",
   "action.cycle_live_grep_provider": "Cycle Live Grep provider",
   "cmd.resume_live_grep": "Resume Live Grep",
   "cmd.resume_live_grep_desc": "Reopen Live Grep with prior query",
-  "cmd.toggle_utility_dock": "Toggle Utility Dock",
-  "cmd.toggle_utility_dock_desc": "Move focus to/from the shared bottom dock",
+  "cmd.toggle_utility_dock": "Bật/tắt dock tiện ích",
+  "cmd.toggle_utility_dock_desc": "Hiện hoặc ẩn dock dưới cùng dùng chung (chẩn đoán, tìm kiếm và thay thế, quickfix, …)",
   "cmd.open_terminal_in_dock": "Open Terminal in Utility Dock",
   "cmd.open_terminal_in_dock_desc": "Open a new terminal inside the dock",
   "cmd.workspace_trust": "Tin cậy không gian làm việc…",
@@ -2395,5 +2395,8 @@
   "dialog.title.permission_denied": "Quyền bị từ chối",
   "dialog.title.name_conflict": "Trùng tên",
   "dialog.title.large_file": "Tệp lớn",
-  "dialog.title.go_to_line": "Đến dòng"
+  "dialog.title.go_to_line": "Đến dòng",
+  "action.focus_utility_dock": "Chuyển focus đến dock tiện ích",
+  "cmd.focus_utility_dock": "Chuyển focus đến dock tiện ích",
+  "cmd.focus_utility_dock_desc": "Di chuyển focus bàn phím đến/rời khỏi dock dưới cùng dùng chung (chẩn đoán, tìm kiếm và thay thế, quickfix, …)"
 }

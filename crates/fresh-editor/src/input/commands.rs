@@ -1709,6 +1709,13 @@ static COMMAND_DEFS: &[CommandDef] = &[
         custom_contexts: &[],
     },
     CommandDef {
+        name_key: "cmd.focus_utility_dock",
+        desc_key: "cmd.focus_utility_dock_desc",
+        action: || Action::FocusUtilityDock,
+        contexts: &[Normal],
+        custom_contexts: &[],
+    },
+    CommandDef {
         name_key: "cmd.open_terminal_in_dock",
         desc_key: "cmd.open_terminal_in_dock_desc",
         action: || Action::OpenTerminalInDock,

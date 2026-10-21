@@ -352,6 +352,220 @@ impl Editor {
         }
     }
 
+    /// Hide the utility dock leaf, preserving its tabs, active buffer, ratio,
+    /// and view state in [`Window::saved_utility_dock`].
+    pub fn hide_utility_dock(&mut self) -> bool {
+        use crate::app::window::SavedUtilityDock;
+        use crate::view::split::SplitRole;
+
+        let Some(dock_leaf) = self
+            .active_window()
+            .split_manager()
+            .find_leaf_by_role(SplitRole::UtilityDock)
+        else {
+            return false;
+        };
+
+        // If dock is the sole split, we cannot close it.
+        if self.active_window().split_manager().root().count_leaves() <= 1 {
+            return false;
+        }
+
+        let mgr = self.active_window().split_manager();
+        let active_buffer = mgr.get_buffer_id(dock_leaf.into()).unwrap_or(BufferId(0));
+        let ratio = mgr
+            .parent_container_of(dock_leaf)
+            .and_then(|c| mgr.get_ratio(c.into()))
+            .unwrap_or(0.7);
+
+        let view_state = self
+            .active_window()
+            .split_view_states()
+            .get(&dock_leaf)
+            .cloned();
+
+        let open_buffers = view_state
+            .as_ref()
+            .map(|vs| vs.open_buffers.clone())
+            .unwrap_or_else(|| vec![TabTarget::Buffer(active_buffer)]);
+
+        if let Some(vs) = view_state {
+            self.active_window_mut().saved_utility_dock = Some(SavedUtilityDock {
+                active_buffer,
+                open_buffers,
+                ratio,
+                view_state: vs,
+            });
+        }
+
+        // If dock has focus, redirect focus to the last focused editor split
+        let active = self.active_window().split_manager().active_split();
+        if active == dock_leaf {
+            let mgr = self.active_window().split_manager();
+            let is_editor_leaf =
+                |leaf| leaf != dock_leaf && mgr.leaf_role(leaf) != Some(SplitRole::UtilityDock);
+            let target_editor = mgr.last_focused_where(is_editor_leaf).or_else(|| {
+                mgr.root()
+                    .leaf_split_ids()
+                    .into_iter()
+                    .find(|&leaf| is_editor_leaf(leaf))
+            });
+
+            if let Some(target) = target_editor {
+                self.active_window_mut()
+                    .split_manager_mut()
+                    .set_active_split(target);
+            }
+        }
+
+        if let Err(e) = self
+            .active_window_mut()
+            .split_manager_mut()
+            .close_split(dock_leaf)
+        {
+            tracing::warn!("Failed to close utility dock: {}", e);
+            return false;
+        }
+
+        self.active_window_mut()
+            .split_view_states_mut()
+            .remove(&dock_leaf);
+        self.active_window_mut()
+            .forget_split_terminal_modes(dock_leaf);
+        self.sync_terminal_mode_to_active_buffer();
+        self.relayout();
+
+        true
+    }
+
+    /// Restore the utility dock from [`Window::saved_utility_dock`] if present.
+    pub fn restore_saved_utility_dock(&mut self) -> Option<LeafId> {
+        use crate::view::split::SplitRole;
+
+        let saved = self.active_window_mut().saved_utility_dock.take()?;
+
+        // Filter surviving buffers
+        let valid_targets: Vec<TabTarget> = saved
+            .open_buffers
+            .into_iter()
+            .filter(|target| match target {
+                TabTarget::Buffer(id) => self.active_window().buffers.contains_key(id),
+                TabTarget::Group(_) => false,
+            })
+            .collect();
+
+        if valid_targets.is_empty() {
+            return None;
+        }
+
+        let active_buf = if valid_targets
+            .iter()
+            .any(|t| *t == TabTarget::Buffer(saved.active_buffer))
+        {
+            saved.active_buffer
+        } else {
+            match valid_targets[0] {
+                TabTarget::Buffer(id) => id,
+                TabTarget::Group(_) => unreachable!(),
+            }
+        };
+
+        let new_leaf = self
+            .active_window_mut()
+            .split_manager_mut()
+            .split_root_positioned(
+                crate::model::event::SplitDirection::Horizontal,
+                active_buf,
+                saved.ratio,
+                false,
+            )
+            .ok()?;
+
+        self.active_window_mut()
+            .split_manager_mut()
+            .set_leaf_role(new_leaf, Some(SplitRole::UtilityDock));
+
+        let mut view_state = saved.view_state;
+        view_state.open_buffers = valid_targets;
+        view_state.set_buffer_tab(active_buf);
+
+        self.active_window_mut()
+            .split_view_states_mut()
+            .insert(new_leaf, view_state);
+
+        self.active_window_mut()
+            .split_manager_mut()
+            .set_active_split(new_leaf);
+
+        self.sync_terminal_mode_to_active_buffer();
+        self.resize_visible_terminals();
+        self.relayout();
+
+        Some(new_leaf)
+    }
+
+    /// Toggle visibility of the utility dock: hides it if open, or restores it
+    /// if previously hidden. If no dock was ever opened, displays a status message.
+    pub fn toggle_utility_dock(&mut self) {
+        use crate::view::split::SplitRole;
+
+        if self
+            .active_window()
+            .split_manager()
+            .find_leaf_by_role(SplitRole::UtilityDock)
+            .is_some()
+        {
+            self.hide_utility_dock();
+        } else if self.restore_saved_utility_dock().is_none() {
+            self.set_status_message(
+                "No Utility Dock open — invoke a dock-aware utility (Diagnostics, Search/Replace, …)"
+                    .to_string(),
+            );
+        }
+    }
+
+    /// Toggle focus between the utility dock and the editor splits.
+    pub fn focus_utility_dock(&mut self) {
+        use crate::view::split::SplitRole;
+
+        if let Some(dock_leaf) = self
+            .active_window()
+            .split_manager()
+            .find_leaf_by_role(SplitRole::UtilityDock)
+        {
+            let active = self.active_window().split_manager().active_split();
+            if active == dock_leaf {
+                let mgr = self.active_window().split_manager();
+                let is_editor_leaf =
+                    |leaf| leaf != dock_leaf && mgr.leaf_role(leaf) != Some(SplitRole::UtilityDock);
+                let target = mgr.last_focused_where(is_editor_leaf).or_else(|| {
+                    mgr.root()
+                        .leaf_split_ids()
+                        .into_iter()
+                        .find(|&leaf| is_editor_leaf(leaf))
+                });
+                if let Some(target) = target {
+                    self.active_window_mut()
+                        .split_manager_mut()
+                        .set_active_split(target);
+                    self.sync_terminal_mode_to_active_buffer();
+                } else {
+                    self.next_split();
+                }
+            } else {
+                self.active_window_mut()
+                    .split_manager_mut()
+                    .set_active_split(dock_leaf);
+                self.sync_terminal_mode_to_active_buffer();
+            }
+        } else {
+            self.set_status_message(
+                "No Utility Dock open — invoke a dock-aware utility (Diagnostics, Search/Replace, …)"
+                    .to_string(),
+            );
+        }
+    }
+
     /// Where the dividers are, read off the tree that placed them: the
     /// divider nodes' own rectangles (`view::shell::splits::separator_rects`),
     /// as `(container, direction, x, y, length)`. The e2e drag tests assert

@@ -2245,13 +2245,13 @@
   "action.open_live_grep": "Live Grep (Find in Files)",
   "action.resume_live_grep": "Resume Live Grep",
   "action.live_grep_export_quickfix": "Export Live Grep results to Quickfix",
-  "action.toggle_utility_dock": "Toggle Utility Dock",
+  "action.toggle_utility_dock": "유틸리티 도크 전환",
   "action.open_terminal_in_dock": "Open terminal in Utility Dock",
   "action.cycle_live_grep_provider": "Cycle Live Grep provider",
   "cmd.resume_live_grep": "Resume Live Grep",
   "cmd.resume_live_grep_desc": "Reopen Live Grep with prior query",
-  "cmd.toggle_utility_dock": "Toggle Utility Dock",
-  "cmd.toggle_utility_dock_desc": "Move focus to/from the shared bottom dock",
+  "cmd.toggle_utility_dock": "유틸리티 도크 전환",
+  "cmd.toggle_utility_dock_desc": "공유 하단 도크 표시 또는 숨기기 (진단, 찾기 및 바꾸기, 빠른 수정, …)",
   "cmd.open_terminal_in_dock": "Open Terminal in Utility Dock",
   "cmd.open_terminal_in_dock_desc": "Open a new terminal inside the dock",
   "cmd.workspace_trust": "워크스페이스 신뢰…",
@@ -2395,5 +2395,8 @@
   "dialog.title.permission_denied": "권한이 거부되었습니다",
   "dialog.title.name_conflict": "이름 충돌",
   "dialog.title.large_file": "큰 파일",
-  "dialog.title.go_to_line": "줄로 이동"
+  "dialog.title.go_to_line": "줄로 이동",
+  "action.focus_utility_dock": "유틸리티 도크 포커스",
+  "cmd.focus_utility_dock": "유틸리티 도크 포커스",
+  "cmd.focus_utility_dock_desc": "키보드 포커스를 공유 하단 도크로/에서 이동 (진단, 찾기 및 바꾸기, 빠른 수정, …)"
 }

@@ -1836,7 +1836,7 @@
       "when": "prompt"
     },
     {
-      "comment": "Utility Dock — focus / unfocus toggle. Avoids Alt+D because Ctrl+D (add_cursor_next_match) is in the multi-cursor cluster and the adjacency is muscle-memory-risky. Mnemonic: 'j' is 'down' in vim-ish navigation, matching the dock's bottom-of-screen home position.",
+      "comment": "Utility Dock — show / hide toggle. Avoids Alt+D because Ctrl+D (add_cursor_next_match) is in the multi-cursor cluster and the adjacency is muscle-memory-risky. Mnemonic: 'j' is 'down' in vim-ish navigation, matching the dock's bottom-of-screen home position.",
       "key": "j",
       "modifiers": ["alt"],
       "action": "toggle_utility_dock",

@@ -424,6 +424,7 @@ pub mod theme;
 pub mod theme_screenshots;
 pub mod toggle_bars;
 pub mod toggle_comment;
+pub mod toggle_utility_dock;
 pub mod torn_save_not_changed_on_disk;
 #[cfg(feature = "plugins")]
 pub mod tree_expansion_owner;

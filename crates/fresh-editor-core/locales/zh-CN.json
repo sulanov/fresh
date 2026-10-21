@@ -2245,13 +2245,13 @@
   "action.open_live_grep": "Live Grep (Find in Files)",
   "action.resume_live_grep": "Resume Live Grep",
   "action.live_grep_export_quickfix": "Export Live Grep results to Quickfix",
-  "action.toggle_utility_dock": "Toggle Utility Dock",
+  "action.toggle_utility_dock": "切换实用工具停靠栏",
   "action.open_terminal_in_dock": "Open terminal in Utility Dock",
   "action.cycle_live_grep_provider": "Cycle Live Grep provider",
   "cmd.resume_live_grep": "Resume Live Grep",
   "cmd.resume_live_grep_desc": "Reopen Live Grep with prior query",
-  "cmd.toggle_utility_dock": "Toggle Utility Dock",
-  "cmd.toggle_utility_dock_desc": "Move focus to/from the shared bottom dock",
+  "cmd.toggle_utility_dock": "切换实用工具停靠栏",
+  "cmd.toggle_utility_dock_desc": "显示或隐藏共享底部停靠栏（诊断、查找与替换、快速修复等）",
   "cmd.open_terminal_in_dock": "Open Terminal in Utility Dock",
   "cmd.open_terminal_in_dock_desc": "Open a new terminal inside the dock",
   "cmd.workspace_trust": "工作区信任…",
@@ -2395,5 +2395,8 @@
   "dialog.title.permission_denied": "权限不足",
   "dialog.title.name_conflict": "名称冲突",
   "dialog.title.large_file": "大文件",
-  "dialog.title.go_to_line": "跳转到行"
+  "dialog.title.go_to_line": "跳转到行",
+  "action.focus_utility_dock": "聚焦实用工具停靠栏",
+  "cmd.focus_utility_dock": "聚焦实用工具停靠栏",
+  "cmd.focus_utility_dock_desc": "将键盘焦点移到共享底部停靠栏或从中移出（诊断、查找与替换、快速修复等）"
 }

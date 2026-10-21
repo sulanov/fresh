@@ -2263,13 +2263,13 @@
   "action.open_live_grep": "Live Grep (Find in Files)",
   "action.resume_live_grep": "Resume Live Grep",
   "action.live_grep_export_quickfix": "Export Live Grep results to Quickfix",
-  "action.toggle_utility_dock": "Toggle Utility Dock",
+  "action.toggle_utility_dock": "Přepnout panel nástrojů",
   "action.open_terminal_in_dock": "Open terminal in Utility Dock",
   "action.cycle_live_grep_provider": "Cycle Live Grep provider",
   "cmd.resume_live_grep": "Resume Live Grep",
   "cmd.resume_live_grep_desc": "Reopen Live Grep with prior query",
-  "cmd.toggle_utility_dock": "Toggle Utility Dock",
-  "cmd.toggle_utility_dock_desc": "Move focus to/from the shared bottom dock",
+  "cmd.toggle_utility_dock": "Přepnout panel nástrojů",
+  "cmd.toggle_utility_dock_desc": "Zobrazit nebo skrýt sdílený dolní panel (diagnostika, hledání a nahrazení, quickfix, …)",
   "cmd.open_terminal_in_dock": "Open Terminal in Utility Dock",
   "cmd.open_terminal_in_dock_desc": "Open a new terminal inside the dock",
   "cmd.workspace_trust": "Důvěra k pracovnímu prostoru…",
@@ -2413,5 +2413,8 @@
   "dialog.title.permission_denied": "Přístup odepřen",
   "dialog.title.name_conflict": "Konflikt názvů",
   "dialog.title.large_file": "Velký soubor",
-  "dialog.title.go_to_line": "Přejít na řádek"
+  "dialog.title.go_to_line": "Přejít na řádek",
+  "action.focus_utility_dock": "Zaměřit panel nástrojů",
+  "cmd.focus_utility_dock": "Zaměřit panel nástrojů",
+  "cmd.focus_utility_dock_desc": "Přesunout zaměření klávesnice na/ze sdíleného dolního panelu (diagnostika, hledání a nahrazení, quickfix, …)"
 }

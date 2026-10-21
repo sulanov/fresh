@@ -145,6 +145,20 @@ pub struct ExitedTerminal {
     pub title: Option<String>,
 }
 
+/// Preserved state of a hidden utility dock split, restored by
+/// `toggle_utility_dock`.
+#[derive(Debug, Clone)]
+pub struct SavedUtilityDock {
+    /// Active buffer in the dock when it was hidden.
+    pub active_buffer: BufferId,
+    /// Tabs open in the dock when it was hidden.
+    pub open_buffers: Vec<crate::view::split::TabTarget>,
+    /// Split ratio of the dock when it was hidden.
+    pub ratio: f32,
+    /// The dock split's view state (scroll, cursor, and per-buffer view states).
+    pub view_state: crate::view::split::SplitViewState,
+}
+
 impl ExitedTerminal {
     /// Short name of the process that died — the basename of the resume or
     /// launch argv's program (`claude`, `codex`, …), or `None` for a terminal
@@ -428,6 +442,9 @@ pub struct Window {
     /// claimed and the user dives elsewhere, the new window starts
     /// with an empty dock and rebuilds on demand.
     pub panel_ids: HashMap<String, BufferId>,
+
+    /// Saved state of the utility dock when hidden by `toggle_utility_dock`.
+    pub saved_utility_dock: Option<SavedUtilityDock>,
 
     /// Buffers attached to this window. Each window owns its
     /// `EditorState`s outright; closing the window drops them.
@@ -2542,6 +2559,7 @@ impl Window {
             remote_reconnect_error: None,
             lsp,
             panel_ids: HashMap::new(),
+            saved_utility_dock: None,
             buffers: WindowBuffers::new(),
             buffer_metadata: HashMap::new(),
             pending_content_load: Vec::new(),

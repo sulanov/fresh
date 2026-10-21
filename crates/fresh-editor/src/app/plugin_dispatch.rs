@@ -4266,9 +4266,15 @@ impl Editor {
         // Path 1 — Utility-dock fast path (issue #1796 / Section 2 of the design):
         // if a leaf with this role already exists, attach the new buffer there
         // instead of spawning a fresh split.
-        if let Some(dock_leaf) =
-            split_role.and_then(|r| self.active_window().split_manager().find_leaf_by_role(r))
-        {
+        let existing_dock_leaf = match split_role {
+            Some(crate::view::split::SplitRole::UtilityDock) => self
+                .active_window()
+                .split_manager()
+                .find_leaf_by_role(crate::view::split::SplitRole::UtilityDock)
+                .or_else(|| self.restore_saved_utility_dock()),
+            None => None,
+        };
+        if let Some(dock_leaf) = existing_dock_leaf {
             return self.route_vbuf_to_existing_dock(
                 dock_leaf,
                 name,

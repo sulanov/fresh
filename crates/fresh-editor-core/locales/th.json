@@ -2245,13 +2245,13 @@
   "action.open_live_grep": "Live Grep (Find in Files)",
   "action.resume_live_grep": "Resume Live Grep",
   "action.live_grep_export_quickfix": "Export Live Grep results to Quickfix",
-  "action.toggle_utility_dock": "Toggle Utility Dock",
+  "action.toggle_utility_dock": "สลับด็อกยูทิลิตี้",
   "action.open_terminal_in_dock": "Open terminal in Utility Dock",
   "action.cycle_live_grep_provider": "Cycle Live Grep provider",
   "cmd.resume_live_grep": "Resume Live Grep",
   "cmd.resume_live_grep_desc": "Reopen Live Grep with prior query",
-  "cmd.toggle_utility_dock": "Toggle Utility Dock",
-  "cmd.toggle_utility_dock_desc": "Move focus to/from the shared bottom dock",
+  "cmd.toggle_utility_dock": "สลับด็อกยูทิลิตี้",
+  "cmd.toggle_utility_dock_desc": "แสดงหรือซ่อนด็อกด้านล่างที่แชร์ (การวินิจฉัย, ค้นหาและแทนที่, แก้ไขด่วน, …)",
   "cmd.open_terminal_in_dock": "Open Terminal in Utility Dock",
   "cmd.open_terminal_in_dock_desc": "Open a new terminal inside the dock",
   "cmd.workspace_trust": "ความเชื่อถือพื้นที่ทำงาน…",
@@ -2395,5 +2395,8 @@
   "dialog.title.permission_denied": "การเข้าถึงถูกปฏิเสธ",
   "dialog.title.name_conflict": "ชื่อซ้ำ",
   "dialog.title.large_file": "ไฟล์ขนาดใหญ่",
-  "dialog.title.go_to_line": "ไปที่บรรทัด"
+  "dialog.title.go_to_line": "ไปที่บรรทัด",
+  "action.focus_utility_dock": "โฟกัสด็อกยูทิลิตี้",
+  "cmd.focus_utility_dock": "โฟกัสด็อกยูทิลิตี้",
+  "cmd.focus_utility_dock_desc": "ย้ายโฟกัสคีย์บอร์ดไป/กลับจากด็อกด้านล่างที่แชร์ (การวินิจฉัย, ค้นหาและแทนที่, แก้ไขด่วน, …)"
 }

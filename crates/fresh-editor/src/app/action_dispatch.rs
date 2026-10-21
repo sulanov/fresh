@@ -576,30 +576,10 @@ impl Editor {
                 self.handle_action(Action::PluginAction("resume_live_grep".to_string()))?;
             }
             Action::ToggleUtilityDock => {
-                use crate::view::split::SplitRole;
-                if let Some(dock_leaf) = self
-                    .active_window()
-                    .split_manager()
-                    .find_leaf_by_role(SplitRole::UtilityDock)
-                {
-                    let active = self.active_window().split_manager().active_split();
-                    if active == dock_leaf {
-                        // Already focused — no editor-leaf history yet,
-                        // so just cycle to the next leaf via the
-                        // existing Alt+] command. Phase 7 will track a
-                        // proper "previous editor split" pointer.
-                        self.next_split();
-                    } else {
-                        self.active_window_mut()
-                            .split_manager_mut()
-                            .set_active_split(dock_leaf);
-                    }
-                } else {
-                    self.set_status_message(
-                        "No Utility Dock open — invoke a dock-aware utility (Diagnostics, Search/Replace, …)"
-                            .to_string(),
-                    );
-                }
+                self.toggle_utility_dock();
+            }
+            Action::FocusUtilityDock => {
+                self.focus_utility_dock();
             }
             Action::CycleLiveGrepProvider => {
                 // Only meaningful while the Live Grep overlay is open. Detect via prompt state —
@@ -2023,12 +2003,14 @@ impl Editor {
         use crate::model::event::SplitDirection;
         use crate::view::split::SplitRole;
 
-        if let Some(dock_leaf) = self
+        let existing_dock_leaf = self
             .active_window()
             .split_manager()
             .find_leaf_by_role(SplitRole::UtilityDock)
-        {
-            // Existing dock — focus it and let the regular open_terminal path attach a new tab.
+            .or_else(|| self.restore_saved_utility_dock());
+
+        if let Some(dock_leaf) = existing_dock_leaf {
+            // Existing (or restored) dock — focus it and let the regular open_terminal path attach a new tab.
             self.active_window_mut()
                 .split_manager_mut()
                 .set_active_split(dock_leaf);
