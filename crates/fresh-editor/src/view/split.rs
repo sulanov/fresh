@@ -1409,7 +1409,7 @@ impl SplitManager {
 
         if let Ok(new_split_id) = &result {
             // Set the new split as active
-            self.active_split = *new_split_id;
+            self.set_active_split(*new_split_id);
         }
         result
     }
@@ -1433,7 +1433,7 @@ impl SplitManager {
         let result =
             self.replace_split_with_split(root_id, direction, new_buffer_id, ratio, before);
         if let Ok(new_split_id) = &result {
-            self.active_split = *new_split_id;
+            self.set_active_split(*new_split_id);
         }
         result
     }

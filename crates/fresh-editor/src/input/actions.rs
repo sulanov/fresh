@@ -4101,6 +4101,7 @@ pub fn action_to_events_with_edit_rules(
         | Action::OpenLiveGrep
         | Action::ResumeLiveGrep
         | Action::ToggleUtilityDock
+        | Action::FocusUtilityDock
         | Action::OpenTerminalInDock
         | Action::CycleLiveGrepProvider
         | Action::ShowHelp
