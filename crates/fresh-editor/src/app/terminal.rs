@@ -925,13 +925,15 @@ impl Window {
     /// Both parts are sanitized (control characters stripped, length capped)
     /// the same way as the host window title, and applied without the
     /// `name (k)` disambiguation used for plugin titles.
-    pub fn sync_terminal_titles(&mut self) {
+    ///
+    /// Returns `true` if any terminal display name was updated.
+    pub fn sync_terminal_titles(&mut self) -> bool {
         // Gated by config: when off, tabs keep their static `*Terminal N*`
         // (or plugin) names. Clearing the cache lets a later enable start
         // fresh.
         if !self.config().editor.terminal_auto_title {
             self.terminal_fg_cache.clear();
-            return;
+            return false;
         }
 
         // Refresh the foreground-name cache. A terminal is re-read when the
@@ -992,13 +994,16 @@ impl Window {
             updates.push((*buffer_id, name));
         }
 
+        let mut changed = false;
         for (buffer_id, title) in updates {
             if let Some(meta) = self.buffer_metadata.get_mut(&buffer_id) {
                 if meta.display_name != title {
                     meta.display_name = title;
+                    changed = true;
                 }
             }
         }
+        changed
     }
 
     /// Open a new terminal in this window: spawn the PTY, create
@@ -1500,6 +1505,21 @@ struct RespawnSpec {
 }
 
 impl Editor {
+    /// Synchronize terminal titles across all windows (combining foreground
+    /// process names and OSC title sequences into buffer display names).
+    ///
+    /// Returns `true` if any terminal's display name actually changed, signaling
+    /// that a re-render is required.
+    pub fn sync_terminal_titles(&mut self) -> bool {
+        let mut changed = false;
+        for window in self.windows.values_mut() {
+            if window.sync_terminal_titles() {
+                changed = true;
+            }
+        }
+        changed
+    }
+
     /// Spawn a new PTY-backed terminal session in the active window
     /// using its `root` as cwd. Editor-side thin wrapper; per-window
     /// body lives in `Window::spawn_terminal_session`.

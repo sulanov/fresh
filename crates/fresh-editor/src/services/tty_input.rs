@@ -166,7 +166,27 @@ fn install_sigwinch_handler() {
 /// a stdin reopened from `/dev/tty` makes poll(2) return `POLLNVAL` at once,
 /// which this used to read as a timeout and spin on (#3683).
 fn poll_readable(fd: RawFd, timeout: Duration) -> bool {
-    crate::services::fd_wait::wait_readable(&[fd], timeout).is_ok_and(|r| r.readable(0))
+    poll_readable_with_wakeup(fd, None, timeout).0
+}
+
+/// Poll stdin and an optional wakeup fd for readability.
+/// Returns (stdin_ready, wakeup_ready).
+fn poll_readable_with_wakeup(
+    stdin_fd: RawFd,
+    wakeup_fd: Option<RawFd>,
+    timeout: Duration,
+) -> (bool, bool) {
+    let mut fds = [stdin_fd, -1];
+    let count = if let Some(w) = wakeup_fd {
+        fds[1] = w;
+        2
+    } else {
+        1
+    };
+    match crate::services::fd_wait::wait_readable(&fds[..count], timeout) {
+        Ok(ready) => (ready.readable(0), count > 1 && ready.readable(1)),
+        Err(_) => (false, false),
+    }
 }
 
 /// Read exactly one byte from `fd`, or `None` if the read did not yield one.
@@ -256,6 +276,7 @@ pub struct TtyReader {
     parser: InputParser,
     queue: VecDeque<InputEvent>,
     stdin_fd: RawFd,
+    wakeup_fd: Option<RawFd>,
 }
 
 impl TtyReader {
@@ -270,7 +291,18 @@ impl TtyReader {
             parser: InputParser::new(),
             queue: VecDeque::new(),
             stdin_fd: std::io::stdin().as_raw_fd(),
+            wakeup_fd: None,
         }
+    }
+
+    /// Set an optional wakeup fd (e.g. from WakeupReceiver) to interrupt poll.
+    pub fn set_wakeup_fd(&mut self, fd: Option<RawFd>) {
+        self.wakeup_fd = fd;
+    }
+
+    /// The wakeup fd registered on this reader, if any.
+    pub fn wakeup_fd(&self) -> Option<RawFd> {
+        self.wakeup_fd
     }
 
     /// Return a pending resize event if a `SIGWINCH` fired since last checked.
@@ -410,7 +442,8 @@ impl TtyReader {
         } else {
             timeout
         };
-        if poll_readable(self.stdin_fd, wait) {
+        let (stdin_ready, _) = poll_readable_with_wakeup(self.stdin_fd, self.wakeup_fd, wait);
+        if stdin_ready {
             self.drain_stdin();
         } else {
             // stdin idle for the whole wait: a buffered lone `ESC` is now
@@ -437,6 +470,7 @@ impl TtyReader {
             parser: InputParser::new(),
             queue: VecDeque::new(),
             stdin_fd: fd,
+            wakeup_fd: None,
         }
     }
 }

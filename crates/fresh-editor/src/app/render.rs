@@ -308,7 +308,6 @@ impl Editor {
         }
 
         for window in self.windows.values_mut() {
-            window.sync_terminal_titles();
             window.enforce_terminal_grid_wrap();
         }
 

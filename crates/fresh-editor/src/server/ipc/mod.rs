@@ -647,6 +647,37 @@ impl ServerListener {
     pub fn paths(&self) -> &SocketPaths {
         &self.paths
     }
+
+    /// Raw listener file descriptors for use with poll (Unix only).
+    #[cfg(unix)]
+    pub fn as_raw_fds(&self) -> (std::os::unix::io::RawFd, std::os::unix::io::RawFd) {
+        use std::os::unix::io::{AsFd, AsRawFd};
+        let data_fd = match &self.data_listener {
+            Listener::UdSocket(s) => s.as_fd().as_raw_fd(),
+        };
+        let ctrl_fd = match &self.control_listener {
+            Listener::UdSocket(s) => s.as_fd().as_raw_fd(),
+        };
+        (data_fd, ctrl_fd)
+    }
+
+    /// Raw file descriptors of pending (partially-accepted) streams (Unix only).
+    #[cfg(unix)]
+    pub fn pending_fds(&self) -> Vec<std::os::unix::io::RawFd> {
+        let mut fds = Vec::with_capacity(self.pending_controls.len() + self.pending_data.len());
+        for p in &self.pending_controls {
+            fds.push(p.stream.as_raw_fd());
+        }
+        for p in &self.pending_data {
+            fds.push(p.stream.as_raw_fd());
+        }
+        fds
+    }
+
+    /// Whether there are streams accepted but not yet matched.
+    pub fn has_pending(&self) -> bool {
+        !self.pending_controls.is_empty() || !self.pending_data.is_empty()
+    }
 }
 
 /// The next stream waiting on `listener`, if any.
@@ -730,6 +761,16 @@ impl StreamWrapper {
         };
 
         platform::try_read_nonblocking(&mut guard, buf)
+    }
+
+    /// Get the raw file descriptor (Unix only)
+    #[cfg(unix)]
+    pub fn as_raw_fd(&self) -> std::os::unix::io::RawFd {
+        use std::os::unix::io::{AsFd, AsRawFd};
+        let guard = self.0.lock().unwrap();
+        match &*guard {
+            Stream::UdSocket(s) => s.as_fd().as_raw_fd(),
+        }
     }
 }
 
@@ -937,6 +978,12 @@ impl ServerConnection {
         }
 
         result
+    }
+
+    /// Get raw file descriptors for use with poll (Unix only).
+    #[cfg(unix)]
+    pub fn as_raw_fds(&self) -> (std::os::unix::io::RawFd, std::os::unix::io::RawFd) {
+        (self.data.as_raw_fd(), self.control.as_raw_fd())
     }
 }
 

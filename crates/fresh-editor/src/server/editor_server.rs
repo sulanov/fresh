@@ -319,11 +319,6 @@ impl EditorServer {
         let mut last_render = Instant::now();
         const FRAME_DURATION: Duration = Duration::from_millis(16); // 60fps
 
-        // Poll every 5ms for a second after any activity, so replies to a
-        // keystroke land promptly; once idle, once a frame.
-        const ACTIVE_POLL: Duration = Duration::from_millis(5);
-        const ACTIVE_WINDOW: Duration = Duration::from_secs(1);
-        let mut last_activity = Instant::now();
         let mut periodic_deadline: Option<Instant> = None;
 
         // Bind the web bridge (`--web`) before the loop: unlike a terminal,
@@ -648,10 +643,6 @@ impl EditorServer {
                 }
             }
 
-            if needs_render {
-                last_activity = Instant::now();
-            }
-
             // Render and broadcast if needed
             if needs_render && last_render.elapsed() >= FRAME_DURATION {
                 self.render_and_broadcast()?;
@@ -659,21 +650,94 @@ impl EditorServer {
                 needs_render = false;
             }
 
-            let mut wait = if last_activity.elapsed() < ACTIVE_WINDOW {
-                ACTIVE_POLL
+            // Calculate the wait duration before the next frame or deadline
+            let until_frame = FRAME_DURATION.saturating_sub(last_render.elapsed());
+            let mut wait = if needs_render {
+                until_frame
+            } else if let Some(ref editor) = self.editor {
+                if editor.has_active_high_framerate_animation() {
+                    until_frame
+                } else if let Some(deadline) = periodic_deadline {
+                    let now = Instant::now();
+                    if deadline <= now {
+                        until_frame
+                    } else {
+                        deadline.saturating_duration_since(now)
+                    }
+                } else {
+                    let client_esc = self
+                        .clients
+                        .iter()
+                        .filter_map(|c| c.input_parser.escape_deadline())
+                        .min();
+                    if let Some(esc_deadline) = client_esc {
+                        let now = Instant::now();
+                        if esc_deadline <= now {
+                            Duration::ZERO
+                        } else {
+                            esc_deadline.saturating_duration_since(now)
+                        }
+                    } else if self.listener.has_pending() {
+                        Duration::from_millis(10)
+                    } else {
+                        Duration::from_secs(30)
+                    }
+                }
+            } else if self.listener.has_pending() {
+                Duration::from_millis(10)
             } else {
-                FRAME_DURATION
+                Duration::from_secs(30)
             };
-            if let Some(deadline) = periodic_deadline {
-                // A deadline already due waits for the frame it owes, not 0.
-                let until_frame = FRAME_DURATION.saturating_sub(last_render.elapsed());
-                wait = wait.min(
-                    deadline
-                        .saturating_duration_since(Instant::now())
-                        .max(until_frame),
-                );
+
+            if needs_render {
+                wait = wait.min(until_frame);
             }
-            std::thread::sleep(wait.max(Duration::from_millis(1)));
+
+            #[cfg(unix)]
+            {
+                use nix::poll::{poll, PollFd, PollFlags, PollTimeout};
+                use std::os::unix::io::BorrowedFd;
+
+                let (data_listener_fd, ctrl_listener_fd) = self.listener.as_raw_fds();
+                let data_listener_borrowed = unsafe { BorrowedFd::borrow_raw(data_listener_fd) };
+                let ctrl_listener_borrowed = unsafe { BorrowedFd::borrow_raw(ctrl_listener_fd) };
+
+                let mut poll_fds = vec![
+                    PollFd::new(data_listener_borrowed, PollFlags::POLLIN),
+                    PollFd::new(ctrl_listener_borrowed, PollFlags::POLLIN),
+                ];
+
+                for p_fd in self.listener.pending_fds() {
+                    let p_borrowed = unsafe { BorrowedFd::borrow_raw(p_fd) };
+                    poll_fds.push(PollFd::new(p_borrowed, PollFlags::POLLIN));
+                }
+
+                for client in &self.clients {
+                    let (c_data_fd, c_ctrl_fd) = client.conn.as_raw_fds();
+                    let c_data_borrowed = unsafe { BorrowedFd::borrow_raw(c_data_fd) };
+                    let c_ctrl_borrowed = unsafe { BorrowedFd::borrow_raw(c_ctrl_fd) };
+                    poll_fds.push(PollFd::new(c_data_borrowed, PollFlags::POLLIN));
+                    poll_fds.push(PollFd::new(c_ctrl_borrowed, PollFlags::POLLIN));
+                }
+
+                let wakeup_fd_opt = self.editor.as_ref().map(|e| e.wakeup_receiver().raw_fd());
+                if let Some(w_fd) = wakeup_fd_opt {
+                    let w_borrowed = unsafe { BorrowedFd::borrow_raw(w_fd) };
+                    poll_fds.push(PollFd::new(w_borrowed, PollFlags::POLLIN));
+                }
+
+                let timeout_ms = wait.as_millis().min(u16::MAX as u128) as u16;
+                let _ = poll(&mut poll_fds, PollTimeout::from(timeout_ms));
+
+                if let Some(ref editor) = self.editor {
+                    editor.drain_wakeup();
+                }
+            }
+
+            #[cfg(not(unix))]
+            {
+                std::thread::sleep(wait.min(Duration::from_millis(50)));
+            }
         }
 
         // The same shutdown sequence as the normal (non-daemon) exit path in

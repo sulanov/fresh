@@ -7123,6 +7123,8 @@ fn run_event_loop(
     // `services::tty_input`), not crossterm — this is what prevents mouse
     // reports from leaking into focused terminals (#2745).
     let mut reader = fresh::services::tty_input::TtyReader::new();
+    #[cfg(unix)]
+    reader.set_wakeup_fd(Some(editor.wakeup_receiver().raw_fd()));
     run_event_loop_common(
         editor,
         terminal,
@@ -7250,6 +7252,8 @@ fn run_event_loop(
     // `services::tty_input`), not crossterm — this is what prevents mouse
     // reports from leaking into focused terminals (#2745).
     let mut reader = fresh::services::tty_input::TtyReader::new();
+    #[cfg(unix)]
+    reader.set_wakeup_fd(Some(editor.wakeup_receiver().raw_fd()));
     run_event_loop_common(
         editor,
         terminal,
@@ -7405,14 +7409,6 @@ where
         {
             needs_render = true;
         }
-
-        // Terminal tabs auto-name from the foreground process (tmux-style);
-        // poll on an interval so a command that starts/exits while the UI is
-        // idle is reflected without waiting for an unrelated event.
-        if editor.terminal_titles_need_poll() {
-            needs_render = true;
-        }
-
         if needs_render
             && last_render.elapsed() >= FRAME_DURATION
             && !editor.should_suppress_render()
@@ -7436,10 +7432,16 @@ where
         let event = if let Some(e) = pending_event.take() {
             Some(e)
         } else {
-            let mut timeout = if needs_render {
-                FRAME_DURATION.saturating_sub(last_render.elapsed())
+            let until_next_frame = FRAME_DURATION.saturating_sub(last_render.elapsed());
+            let mut timeout = if needs_render || editor.has_active_high_framerate_animation() {
+                until_next_frame
+            } else if let Some(screensaver_timeout) = editor.screensaver_idle_timeout() {
+                let idle = editor.time_source().elapsed_since(last_input_time);
+                screensaver_timeout
+                    .saturating_sub(idle)
+                    .min(Duration::from_secs(30))
             } else {
-                Duration::from_millis(50)
+                Duration::from_secs(30)
             };
             // Wake for the next time-driven frame
             // (`next_periodic_redraw_deadline`), but never before the frame
@@ -7467,12 +7469,6 @@ where
             if editor.is_paste_pending() || editor.macro_replay_parked() || holds_keys {
                 timeout = timeout.min(LAUNCH_HOLD_POLL);
             }
-            // A `--diff` launch draws nothing until its plugin has the view up,
-            // and the plugin gets there through a chain of calls the editor
-            // answers on its ticks. Nothing wakes this wait when one arrives,
-            // so at the idle 50 ms each link waited up to that long; and with
-            // a frame owed but held, the frame budget above is spent, which
-            // would spin. A short wait answers each call promptly instead.
             if editor.holds_launch_frames() {
                 timeout = LAUNCH_HOLD_POLL;
             }
@@ -7480,6 +7476,7 @@ where
         };
 
         let Some(event) = event else {
+            editor.drain_wakeup();
             // No input this cycle. If the editor has been idle long enough,
             // start the wave-animation screensaver (it renders on the next
             // iteration via the animation-active check above).
@@ -7575,10 +7572,15 @@ fn poll_with_gpm(
     let stdin_borrowed = unsafe { BorrowedFd::borrow_raw(stdin_fd) };
     let gpm_borrowed = unsafe { BorrowedFd::borrow_raw(gpm_fd) };
 
-    let mut poll_fds = [
+    let mut poll_fds = vec![
         PollFd::new(stdin_borrowed, PollFlags::POLLIN),
         PollFd::new(gpm_borrowed, PollFlags::POLLIN),
     ];
+
+    if let Some(w_fd) = reader.wakeup_fd() {
+        let w_borrowed = unsafe { BorrowedFd::borrow_raw(w_fd) };
+        poll_fds.push(PollFd::new(w_borrowed, PollFlags::POLLIN));
+    }
 
     // Convert timeout to milliseconds, clamping to u16::MAX (about 65 seconds)
     let timeout_ms = timeout.as_millis().min(u16::MAX as u128) as u16;

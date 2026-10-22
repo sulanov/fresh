@@ -72,6 +72,11 @@ impl ClientInputParser {
         events
     }
 
+    /// The deadline when a pending lone ESC will be resolved as Escape key.
+    pub fn escape_deadline(&self) -> Option<Instant> {
+        self.escape_pending_since.map(|since| since + ESC_GRACE)
+    }
+
     /// Start the timer when an `ESC` becomes pending, and clear it as soon as
     /// the parser has moved on (the continuation arrived, or the escape was
     /// already flushed).

@@ -6005,3 +6005,28 @@ fn test_checkpoint_leaves_a_lazily_read_scrollback_view_intact() {
     let len = buffer.len();
     assert_eq!(buffer.get_text_range_mut(0, len).unwrap(), shown);
 }
+
+#[test]
+fn test_terminal_idle_deadlines_and_ticks() {
+    let mut harness = harness_or_return!(120, 30);
+    let mut config = harness.editor().config().clone();
+    config.editor.terminal_auto_title = true;
+    harness.editor_mut().set_config(config);
+    harness.editor_mut().open_terminal();
+    harness.tick_and_render().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    let _ = harness.tick_and_render();
+
+    assert!(!harness.editor().has_active_high_framerate_animation());
+    assert!(!harness.editor().terminal_titles_need_poll());
+    let tick_render = fresh::app::editor_tick(harness.editor_mut(), || Ok(())).unwrap();
+    assert!(!tick_render);
+
+    // After FG_POLL_INTERVAL has elapsed, polling becomes due, but editor_tick
+    // must NOT request a render if the title hasn't changed.
+    std::thread::sleep(std::time::Duration::from_millis(1050));
+    assert!(harness.editor().terminal_titles_need_poll());
+    let tick_render = fresh::app::editor_tick(harness.editor_mut(), || Ok(())).unwrap();
+    assert!(!tick_render);
+    assert!(!harness.editor().terminal_titles_need_poll());
+}

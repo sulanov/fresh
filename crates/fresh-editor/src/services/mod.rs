@@ -46,5 +46,6 @@ pub mod time_source;
 pub mod tracing_setup;
 #[cfg(all(unix, feature = "runtime"))]
 pub mod tty_input;
+pub mod wakeup;
 pub mod warning_log;
 pub mod workspace_trust;

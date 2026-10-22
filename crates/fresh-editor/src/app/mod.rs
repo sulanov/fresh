@@ -235,6 +235,9 @@ pub fn editor_tick(
     if editor.poll_stdin_streaming() {
         needs_render = true;
     }
+    if editor.sync_terminal_titles() {
+        needs_render = true;
+    }
 
     if let Err(e) = editor.auto_recovery_save_dirty_buffers() {
         tracing::debug!("Auto-recovery-save error: {}", e);
@@ -834,6 +837,9 @@ pub struct Editor {
 
     /// Bridge for async messages from tokio tasks to main loop
     async_bridge: Option<AsyncBridge>,
+
+    /// Wakeup receiver for waking the event loop on async events
+    pub(crate) wakeup_receiver: crate::services::wakeup::WakeupReceiver,
 
     /// Connection ids (`AgentChannel::id`) for which a reconnect-forwarder task
     /// has already been spawned. The forwarder awaits each channel's
