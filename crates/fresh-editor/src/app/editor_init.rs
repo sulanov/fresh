@@ -409,6 +409,7 @@ pub(super) struct EditorParts {
     // Async / IO
     pub(super) tokio_runtime: Option<crate::services::runtime::LiveRuntime>,
     pub(super) async_bridge: AsyncBridge,
+    pub(super) wakeup_receiver: crate::services::wakeup::WakeupReceiver,
     pub(super) local_filesystem: Arc<dyn FileSystem + Send + Sync>,
 
     // Chrome flags resolved from config
@@ -666,6 +667,7 @@ impl Editor {
             next_machine_id: 1,
             tokio_runtime: parts.tokio_runtime,
             async_bridge: Some(parts.async_bridge),
+            wakeup_receiver: parts.wakeup_receiver,
             paste_pending: std::collections::HashMap::new(),
             paste_slow_path_just_armed: false,
             paste_render_suppress_until: None,
@@ -1256,7 +1258,10 @@ impl Editor {
         // Per-window subsystems (LSP, terminal output, file-explorer
         // async expansion) flow through their owning window's
         // bridge instead — see `Window.bridge`.
-        let async_bridge = AsyncBridge::new();
+        let (wakeup_notifier, wakeup_receiver) =
+            crate::services::wakeup::wakeup_channel().expect("wakeup pipe");
+        let async_bridge = AsyncBridge::with_notifier(wakeup_notifier.clone());
+        crate::server::local_control::set_wakeup_notifier(wakeup_notifier);
         let event_broadcaster = crate::model::control_event::EventBroadcaster::default();
 
         if tokio_runtime.is_none() {
@@ -1647,6 +1652,7 @@ impl Editor {
             color_capability,
             tokio_runtime,
             async_bridge,
+            wakeup_receiver,
             local_filesystem: Arc::clone(&local_filesystem),
             windows,
             dormant_remote,

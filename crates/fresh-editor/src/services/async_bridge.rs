@@ -10,6 +10,7 @@
 //! - Computation should be sync (editing, rendering)
 //! - Main loop remains responsive and simple
 
+use crate::services::wakeup::WakeupNotifier;
 use crate::view::file_tree::{FileTreeView, NodeId};
 use lsp_types::{
     CodeActionOrCommand, CompletionItem, Diagnostic, FoldingRange, InlayHint, Location,
@@ -626,9 +627,45 @@ pub enum LspServerStatus {
 /// - Lightweight, cloneable sender that can be passed to async tasks
 /// - Non-blocking receiver checked each frame in main loop
 /// - No locks needed in main loop (channel handles synchronization)
-#[derive(Clone)]
-pub struct AsyncBridge {
+#[derive(Clone, Debug)]
+pub struct AsyncSender {
     sender: mpsc::Sender<AsyncMessage>,
+    notifier: Option<WakeupNotifier>,
+}
+
+impl AsyncSender {
+    pub fn new(sender: mpsc::Sender<AsyncMessage>, notifier: Option<WakeupNotifier>) -> Self {
+        Self { sender, notifier }
+    }
+
+    pub fn from_sender(sender: mpsc::Sender<AsyncMessage>) -> Self {
+        Self::new(sender, None)
+    }
+
+    /// Send an async message to the main loop and signal the wakeup handle.
+    pub fn send(&self, msg: AsyncMessage) -> Result<(), mpsc::SendError<AsyncMessage>> {
+        self.sender.send(msg)?;
+        if let Some(notifier) = &self.notifier {
+            notifier.notify();
+        }
+        Ok(())
+    }
+
+    /// Access the underlying mpsc sender.
+    pub fn raw_sender(&self) -> &mpsc::Sender<AsyncMessage> {
+        &self.sender
+    }
+}
+
+impl From<mpsc::Sender<AsyncMessage>> for AsyncSender {
+    fn from(sender: mpsc::Sender<AsyncMessage>) -> Self {
+        Self::from_sender(sender)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct AsyncBridge {
+    sender: AsyncSender,
     // Receiver wrapped in Arc<Mutex<>> to allow cloning
     receiver: std::sync::Arc<std::sync::Mutex<mpsc::Receiver<AsyncMessage>>>,
 }
@@ -641,9 +678,19 @@ impl AsyncBridge {
     /// 2. LSP messages are infrequent (< 100/sec typically)
     /// 3. Memory usage is bounded by message rate × frame time
     pub fn new() -> Self {
+        Self::with_notifier_opt(None)
+    }
+
+    /// Create a new async bridge connected to a wakeup notifier
+    pub fn with_notifier(notifier: WakeupNotifier) -> Self {
+        Self::with_notifier_opt(Some(notifier))
+    }
+
+    /// Create a new async bridge with an optional wakeup notifier
+    pub fn with_notifier_opt(notifier: Option<WakeupNotifier>) -> Self {
         let (sender, receiver) = mpsc::channel();
         Self {
-            sender,
+            sender: AsyncSender::new(sender, notifier),
             receiver: std::sync::Arc::new(std::sync::Mutex::new(receiver)),
         }
     }
@@ -654,8 +701,23 @@ impl AsyncBridge {
     /// - Cloned freely (cheap Arc internally)
     /// - Sent to async tasks
     /// - Stored in LspClient instances
-    pub fn sender(&self) -> mpsc::Sender<AsyncMessage> {
+    pub fn sender(&self) -> AsyncSender {
         self.sender.clone()
+    }
+
+    /// Send an async message directly through this bridge
+    pub fn send(&self, msg: AsyncMessage) -> Result<(), mpsc::SendError<AsyncMessage>> {
+        self.sender.send(msg)
+    }
+
+    /// Set or update the wakeup notifier
+    pub fn set_wakeup_notifier(&mut self, notifier: WakeupNotifier) {
+        self.sender.notifier = Some(notifier);
+    }
+
+    /// Get a clone of the current wakeup notifier, if any
+    pub fn wakeup_notifier(&self) -> Option<WakeupNotifier> {
+        self.sender.notifier.clone()
     }
 
     /// Try to receive pending messages (non-blocking)

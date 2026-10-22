@@ -85,6 +85,7 @@ struct Shared {
     /// that is still running. A script settles on the plugin thread well after
     /// submission, so its reply is held here until the outcome arrives.
     command_replies: Arc<Mutex<HashMap<u64, Sender<ServerControl>>>>,
+    wakeup: Mutex<Option<crate::services::wakeup::WakeupNotifier>>,
 }
 
 /// Process-global handle. `None` until [`start`] succeeds; the control
@@ -125,10 +126,19 @@ pub fn start() -> std::io::Result<&'static str> {
         req_rx: Mutex::new(bound.req_rx),
         waiters: bound.waiters,
         command_replies: Arc::new(Mutex::new(HashMap::new())),
+        wakeup: Mutex::new(None),
     });
     let id = SESSION_ID.get_or_init(|| session_id);
     tracing::info!("Local control socket listening as session {}", id);
     Ok(id.as_str())
+}
+
+/// Set a wakeup notifier on the local control subsystem so incoming requests
+/// wake the main editor loop immediately.
+pub fn set_wakeup_notifier(notifier: crate::services::wakeup::WakeupNotifier) {
+    if let Some(shared) = GLOBAL.get() {
+        *shared.wakeup.lock().unwrap() = Some(notifier);
+    }
 }
 
 /// The movable pieces produced by [`bind_and_spawn`]: everything the
@@ -332,6 +342,33 @@ fn accept_loop(
     let next_wait_id = Arc::new(AtomicU64::new(1));
 
     while !shutdown.load(Ordering::SeqCst) {
+        #[cfg(unix)]
+        {
+            use nix::poll::{poll, PollFd, PollFlags, PollTimeout};
+            use std::os::unix::io::BorrowedFd;
+
+            let (data_fd, ctrl_fd) = listener.as_raw_fds();
+            let data_borrowed = unsafe { BorrowedFd::borrow_raw(data_fd) };
+            let ctrl_borrowed = unsafe { BorrowedFd::borrow_raw(ctrl_fd) };
+
+            let mut fds = vec![
+                PollFd::new(data_borrowed, PollFlags::POLLIN),
+                PollFd::new(ctrl_borrowed, PollFlags::POLLIN),
+            ];
+            for p_fd in listener.pending_fds() {
+                let borrowed = unsafe { BorrowedFd::borrow_raw(p_fd) };
+                fds.push(PollFd::new(borrowed, PollFlags::POLLIN));
+            }
+
+            let timeout = if listener.has_pending() {
+                PollTimeout::from(50u16)
+            } else {
+                PollTimeout::from(5000u16)
+            };
+
+            let _ = poll(&mut fds, timeout);
+        }
+
         match listener.accept() {
             Ok(Some(conn)) => {
                 let req_tx = req_tx.clone();
@@ -346,11 +383,22 @@ fn accept_loop(
                         handle_connection(conn, req_tx, waiters, next_wait_id);
                     });
             }
-            Ok(None) => std::thread::sleep(ACCEPT_POLL_INTERVAL),
+            Ok(None) => {
+                #[cfg(not(unix))]
+                std::thread::sleep(ACCEPT_POLL_INTERVAL);
+            }
             Err(e) => {
                 tracing::warn!("Local control accept error: {}", e);
                 std::thread::sleep(ACCEPT_POLL_INTERVAL);
             }
+        }
+    }
+}
+
+fn notify_global_wakeup() {
+    if let Some(shared) = GLOBAL.get() {
+        if let Some(w) = shared.wakeup.lock().unwrap().as_ref() {
+            w.notify();
         }
     }
 }
@@ -405,6 +453,7 @@ fn handle_connection(
                 let _ = req_tx.send(LocalControlRequest::OpenWindow {
                     path: PathBuf::from(path),
                 });
+                notify_global_wakeup();
             }
             ClientControl::OpenFiles { files, wait } => {
                 // Register a waiter *before* handing the request to the
@@ -423,6 +472,7 @@ fn handle_connection(
                     files,
                     wait_id: wait_slot.as_ref().map(|(id, _)| *id),
                 });
+                notify_global_wakeup();
 
                 if let Some((id, rx)) = wait_slot {
                     // Block until `pump` reports the buffer closed. A recv
@@ -447,6 +497,7 @@ fn handle_connection(
                     source,
                     reply: reply_tx,
                 });
+                notify_global_wakeup();
                 // Bounded, unlike the other requests: a script could in
                 // principle never settle, and an unbounded wait would leak this
                 // thread (and the client's connection) for the life of the
@@ -819,6 +870,7 @@ mod tests {
             req_rx: Mutex::new(bound.req_rx),
             waiters: bound.waiters,
             command_replies: Arc::new(Mutex::new(HashMap::new())),
+            wakeup: Mutex::new(None),
         }
     }
 

@@ -361,7 +361,7 @@ pub struct FileProvider {
     filesystem: std::sync::Arc<dyn crate::model::filesystem::FileSystem + Send + Sync>,
     process_spawner: std::sync::Arc<dyn crate::services::remote::ProcessSpawner>,
     runtime: Option<crate::services::runtime::LiveRuntime>,
-    async_sender: Option<std::sync::mpsc::Sender<crate::services::async_bridge::AsyncMessage>>,
+    async_sender: Option<crate::services::async_bridge::AsyncSender>,
     show_hidden: std::sync::Arc<std::sync::atomic::AtomicBool>,
     /// List files `.gitignore` leaves out too (Git repos only).
     include_gitignored: std::sync::Arc<std::sync::atomic::AtomicBool>,
@@ -374,7 +374,7 @@ impl FileProvider {
         filesystem: std::sync::Arc<dyn crate::model::filesystem::FileSystem + Send + Sync>,
         process_spawner: std::sync::Arc<dyn crate::services::remote::ProcessSpawner>,
         runtime: Option<crate::services::runtime::LiveRuntime>,
-        async_sender: Option<std::sync::mpsc::Sender<crate::services::async_bridge::AsyncMessage>>,
+        async_sender: Option<crate::services::async_bridge::AsyncSender>,
     ) -> Self {
         Self {
             cache: std::sync::Arc::new(std::sync::Mutex::new(FileCache {
@@ -851,7 +851,7 @@ fn walk_dir_with_updates(
     generation: u64,
     cancel: &std::sync::atomic::AtomicBool,
     frecency: &std::sync::RwLock<std::collections::HashMap<String, FrecencyData>>,
-    sender: &std::sync::mpsc::Sender<crate::services::async_bridge::AsyncMessage>,
+    sender: &crate::services::async_bridge::AsyncSender,
     show_hidden: bool,
     custom_ignore: &CustomIgnore,
 ) {

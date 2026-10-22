@@ -3388,7 +3388,7 @@ impl Editor {
         callback_id: fresh_core::api::JsCallbackId,
     ) -> Option<(
         crate::services::runtime::LiveRuntime,
-        std::sync::mpsc::Sender<crate::services::async_bridge::AsyncMessage>,
+        crate::services::async_bridge::AsyncSender,
     )> {
         let Some(runtime) = self.tokio_runtime.clone() else {
             self.plugin_manager

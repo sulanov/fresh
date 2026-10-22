@@ -791,6 +791,9 @@ pub struct Editor {
     /// Bridge for async messages from tokio tasks to main loop
     async_bridge: Option<AsyncBridge>,
 
+    /// Wakeup receiver for waking the event loop on async events
+    pub(crate) wakeup_receiver: crate::services::wakeup::WakeupReceiver,
+
     /// Connection ids (`AgentChannel::id`) for which a reconnect-forwarder task
     /// has already been spawned. The forwarder awaits each channel's
     /// `reconnect_notify` and turns a hot-swap into an

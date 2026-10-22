@@ -270,40 +270,51 @@ impl Editor {
         &self.global_popups
     }
 
+    /// Access the wakeup receiver used to wake the event loop on async events.
+    pub fn wakeup_receiver(&self) -> &crate::services::wakeup::WakeupReceiver {
+        &self.wakeup_receiver
+    }
+
+    /// Drain any pending bytes from the wakeup pipe.
+    pub fn drain_wakeup(&self) {
+        self.wakeup_receiver.drain();
+    }
+
+    /// Whether a high-framerate animation is actively progressing that requires
+    /// 60fps pacing (`FRAME_DURATION`), such as window slide/fade animations,
+    /// smooth wheel walking, drag autoscroll, or move previews.
+    pub fn has_active_high_framerate_animation(&self) -> bool {
+        self.windows.values().any(|w| w.animations.is_active())
+            || self.has_pending_wheel_scroll()
+            || self.has_drag_autoscroll()
+            || self.explorer_move_preview_deadline().is_some()
+            || self.tree_move_previews_deadline().is_some()
+    }
+
     /// The earliest wall-clock deadline at which the main event loop
-    /// needs to wake up and re-render, *purely because of internal
-    /// time-driven UI elements* (animations, the LSP status-bar
-    /// spinner). Returns `None` when no time-driven UI is in flight —
+    /// needs to wake up and re-render or handle a periodic task.
+    /// Returns `None` when no time-driven UI or debounce is in flight —
     /// the loop can sleep until the next user / async event without
-    /// missing a frame.
-    ///
-    /// The `Some` case includes the LSP-progress spinner: its glyph
-    /// is computed from `SystemTime::now() / 100ms`, so the loop has
-    /// to wake at ~100ms cadence to actually advance it. Without
-    /// this signal, the indicator would only tick when an unrelated
-    /// event caused a frame, and the user would see a "frozen"
-    /// spinner whenever the server stopped emitting `$/progress`
-    /// (e.g. died externally — see #1941 issue 3).
+    /// missing a frame or timer.
     pub fn next_periodic_redraw_deadline(&self) -> Option<std::time::Instant> {
-        let lsp_progress_deadline = if self.active_window().has_active_lsp_progress() {
+        let lsp_progress_deadline = if self.windows.values().any(|w| w.has_active_lsp_progress()) {
             // 100ms matches the spinner-glyph period in
             // `lsp_status::compose_lsp_status`.
             Some(std::time::Instant::now() + std::time::Duration::from_millis(100))
         } else {
             None
         };
-        let anim_deadline = self.active_window().animations.next_deadline();
+        let anim_deadline = self
+            .windows
+            .values()
+            .filter_map(|w| w.animations.next_deadline())
+            .min();
         // Paste-pending deadline: the editor tick falls back to the
         // internal clipboard if the async arboard read doesn't return
         // by this point. Including it here makes the main loop wake
         // exactly when the timeout needs to fire, so a hung clipboard
         // owner can't block the UI past `PASTE_ASYNC_DEADLINE`.
         let paste_deadline = self.next_paste_deadline();
-        // Note: the terminal-title poll deadline is intentionally NOT folded
-        // in here. This deadline path caps the loop's wait to one frame
-        // (~16ms) for smooth animation, which would turn the ~1s title poll
-        // into a 60Hz busy loop. The loop's existing 50ms idle poll is fine
-        // granularity to notice `terminal_titles_need_poll` going true.
         // A wheel gesture walking its remaining lines needs a frame per
         // line; without this the walk would stall on an idle loop.
         let wheel_deadline = self.pending_wheel_scroll_deadline();
@@ -312,15 +323,11 @@ impl Editor {
         let drag_deadline = self.drag_autoscroll_deadline();
         // The occurrence highlight's debounce. It is applied inside a render
         // and only once its delay has elapsed, so like the spinner above it
-        // needs the loop to come back for it: with the editor idle after a
-        // cursor move there is no next frame, and the highlight stayed armed
-        // until an unrelated event forced one — which is why it appeared to
-        // jump on the next keystroke. Across every buffer in the window, not
-        // just the active one: each rendered split runs its own update.
+        // needs the loop to come back for it.
         let highlight_deadline = self
-            .active_window()
-            .buffers
-            .iter()
+            .windows
+            .values()
+            .flat_map(|w| w.buffers.iter())
             .filter_map(|(_, state)| state.reference_highlight_overlay.next_deadline())
             .min();
         // A drop's move preview types a character at a time, and what it was
@@ -335,6 +342,50 @@ impl Editor {
         // A macro replay parked on a plugin step resumes from the loop, so the
         // loop has to come straight back rather than sleep its idle poll.
         let macro_replay_deadline = self.macro_replay_parked().then(std::time::Instant::now);
+        // Terminal auto-title polling deadline
+        let terminal_title_deadline = self.terminal_title_poll_deadline();
+        #[cfg(feature = "plugins")]
+        let plugin_timer_deadline = self.plugin_timers.iter().map(|t| t.next_fire).min();
+        #[cfg(not(feature = "plugins"))]
+        let plugin_timer_deadline = None;
+
+        let hover_deadline = if self.config.editor.mouse_hover_enabled {
+            let hover_delay =
+                std::time::Duration::from_millis(self.config.editor.mouse_hover_delay_ms);
+            self.windows
+                .values()
+                .filter_map(|w| match w.mouse_state.lsp_hover_state {
+                    Some((_, start_time, _, _, _)) if !w.mouse_state.lsp_hover_request_sent => {
+                        Some(start_time + hover_delay)
+                    }
+                    _ => None,
+                })
+                .min()
+        } else {
+            None
+        };
+
+        let completion_deadline = self
+            .windows
+            .values()
+            .filter_map(|w| w.scheduled_completion_trigger)
+            .min();
+        let diagnostic_deadline = self
+            .windows
+            .values()
+            .filter_map(|w| w.scheduled_diagnostic_pull.map(|(_, t)| t))
+            .min();
+        let inlay_hints_deadline = self
+            .windows
+            .values()
+            .filter_map(|w| w.scheduled_inlay_hints_request.map(|(_, t)| t))
+            .min();
+        let folding_deadline = self
+            .windows
+            .values()
+            .flat_map(|w| w.folding_ranges_debounce.values().copied())
+            .min();
+        let dock_scrollbar_deadline = self.dock.as_ref().and_then(|d| d.scrollbar_flash_until);
         [
             lsp_progress_deadline,
             anim_deadline,
@@ -344,6 +395,14 @@ impl Editor {
             wheel_deadline,
             drag_deadline,
             highlight_deadline,
+            terminal_title_deadline,
+            plugin_timer_deadline,
+            hover_deadline,
+            completion_deadline,
+            diagnostic_deadline,
+            inlay_hints_deadline,
+            folding_deadline,
+            dock_scrollbar_deadline,
         ]
         .into_iter()
         .flatten()
@@ -362,6 +421,9 @@ impl Editor {
         }
         let mut earliest: Option<std::time::Instant> = None;
         for window in self.windows.values() {
+            if !window.config().editor.terminal_auto_title {
+                continue;
+            }
             let has_auto = window
                 .terminal_buffers
                 .keys()

@@ -12,8 +12,8 @@
 //! - Uses tokio channels for command/response communication
 
 use crate::services::async_bridge::{
-    AsyncBridge, AsyncMessage, LspMessageType, LspProgressValue, LspSemanticTokensResponse,
-    LspServerStatus,
+    AsyncBridge, AsyncMessage, AsyncSender, LspMessageType, LspProgressValue,
+    LspSemanticTokensResponse, LspServerStatus,
 };
 use crate::services::process_limits::ProcessLimits;
 use crate::services::runtime::LiveRuntime;
@@ -38,7 +38,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
-use std::sync::{mpsc as std_mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{ChildStdin, ChildStdout};
@@ -1065,7 +1065,7 @@ struct LspState {
     initialized: Arc<AtomicBool>,
 
     /// Sender for async messages to main loop
-    async_tx: std_mpsc::Sender<AsyncMessage>,
+    async_tx: AsyncSender,
 
     /// Language ID (for error reporting)
     language: Arc<String>,
@@ -3063,7 +3063,7 @@ struct LspTask {
     initialized: bool,
 
     /// Sender for async messages to main loop
-    async_tx: std_mpsc::Sender<AsyncMessage>,
+    async_tx: AsyncSender,
 
     /// Language ID (for error reporting)
     language: String,
@@ -3098,7 +3098,7 @@ impl LspTask {
         env: &std::collections::HashMap<String, String>,
         language: String,
         server_name: String,
-        async_tx: std_mpsc::Sender<AsyncMessage>,
+        async_tx: AsyncSender,
         process_limits: &ProcessLimits,
         stderr_log_path: std::path::PathBuf,
         language_id_overrides: HashMap<String, String>,
@@ -3209,7 +3209,7 @@ impl LspTask {
     fn spawn_stdout_reader(
         mut stdout: BufReader<ChildStdout>,
         pending: PendingRequests,
-        async_tx: std_mpsc::Sender<AsyncMessage>,
+        async_tx: AsyncSender,
         language: String,
         server_name: String,
         server_command: String,
@@ -4328,7 +4328,7 @@ fn parse_progress_notification(
 async fn handle_message_dispatch(
     message: JsonRpcMessage,
     pending: &PendingRequests,
-    async_tx: &std_mpsc::Sender<AsyncMessage>,
+    async_tx: &AsyncSender,
     language: &str,
     server_name: &str,
     server_command: &str,
@@ -4582,7 +4582,7 @@ async fn handle_message_dispatch(
 #[allow(clippy::let_underscore_must_use)] // async_tx.send() is best-effort; receiver drop means editor shutdown
 async fn handle_notification_dispatch(
     notification: JsonRpcNotification,
-    async_tx: &std_mpsc::Sender<AsyncMessage>,
+    async_tx: &AsyncSender,
     language: &str,
     server_name: &str,
     document_versions: &Arc<std::sync::Mutex<HashMap<PathBuf, i64>>>,

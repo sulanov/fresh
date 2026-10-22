@@ -86,8 +86,8 @@ pub fn relay_loop(
             fds.push(PollFd::new(gpm_borrowed, PollFlags::POLLIN));
         }
 
-        match poll(&mut fds, nix::poll::PollTimeout::from(100u8)) {
-            // 100ms timeout for resize check
+        match poll(&mut fds, nix::poll::PollTimeout::from(5000u16)) {
+            // 5s backstop timeout; SIGWINCH interrupts poll via EINTR immediately
             Ok(0) => continue, // Timeout, check resize
             Ok(_) => {}
             Err(nix::errno::Errno::EINTR) => continue,
@@ -300,7 +300,9 @@ pub fn setup_resize_handler(flag: Arc<AtomicBool>) -> io::Result<()> {
     unsafe {
         let mut action: libc::sigaction = std::mem::zeroed();
         action.sa_sigaction = handle_sigwinch as *const () as usize;
-        action.sa_flags = libc::SA_RESTART;
+        // Deliberately do NOT set SA_RESTART, so SIGWINCH interrupts poll()
+        // immediately with EINTR instead of waiting for a timeout.
+        action.sa_flags = 0;
 
         if libc::sigaction(libc::SIGWINCH, &action, std::ptr::null_mut()) != 0 {
             return Err(io::Error::last_os_error());

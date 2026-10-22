@@ -162,17 +162,42 @@ fn install_sigwinch_handler() {
 /// timeout or `EINTR` (e.g. a `SIGWINCH`, whose pending resize the caller then
 /// picks up via [`TtyReader::take_resize`]).
 fn poll_readable(fd: RawFd, timeout: Duration) -> bool {
+    poll_readable_with_wakeup(fd, None, timeout).0
+}
+
+/// Poll stdin and an optional wakeup fd for readability.
+/// Returns (stdin_ready, wakeup_ready).
+fn poll_readable_with_wakeup(
+    stdin_fd: RawFd,
+    wakeup_fd: Option<RawFd>,
+    timeout: Duration,
+) -> (bool, bool) {
     use nix::poll::{poll, PollFd, PollFlags, PollTimeout};
-    // SAFETY: fd is stdin, valid for the duration of the poll call.
-    let borrowed = unsafe { BorrowedFd::borrow_raw(fd) };
-    let mut fds = [PollFd::new(borrowed, PollFlags::POLLIN)];
-    let timeout_ms = timeout.as_millis().min(u16::MAX as u128) as u16;
-    match poll(&mut fds, PollTimeout::from(timeout_ms)) {
-        Ok(n) if n > 0 => fds[0]
-            .revents()
-            .is_some_and(|r| r.contains(PollFlags::POLLIN)),
-        _ => false,
+
+    // SAFETY: stdin_fd is stdin, valid for the duration of the poll call.
+    let stdin_borrowed = unsafe { BorrowedFd::borrow_raw(stdin_fd) };
+    let mut fds = vec![PollFd::new(stdin_borrowed, PollFlags::POLLIN)];
+
+    if let Some(w_fd) = wakeup_fd {
+        let w_borrowed = unsafe { BorrowedFd::borrow_raw(w_fd) };
+        fds.push(PollFd::new(w_borrowed, PollFlags::POLLIN));
     }
+
+    let timeout_ms = timeout.as_millis().min(u16::MAX as u128) as u16;
+    let _ = poll(&mut fds, PollTimeout::from(timeout_ms));
+
+    let stdin_ready = fds[0]
+        .revents()
+        .is_some_and(|r| r.contains(PollFlags::POLLIN));
+    let wakeup_ready = if fds.len() > 1 {
+        fds[1]
+            .revents()
+            .is_some_and(|r| r.contains(PollFlags::POLLIN))
+    } else {
+        false
+    };
+
+    (stdin_ready, wakeup_ready)
 }
 
 /// Read exactly one byte from `fd`, or `None` if the read did not yield one.
@@ -262,6 +287,7 @@ pub struct TtyReader {
     parser: InputParser,
     queue: VecDeque<InputEvent>,
     stdin_fd: RawFd,
+    wakeup_fd: Option<RawFd>,
 }
 
 impl TtyReader {
@@ -276,7 +302,18 @@ impl TtyReader {
             parser: InputParser::new(),
             queue: VecDeque::new(),
             stdin_fd: std::io::stdin().as_raw_fd(),
+            wakeup_fd: None,
         }
+    }
+
+    /// Set an optional wakeup fd (e.g. from WakeupReceiver) to interrupt poll.
+    pub fn set_wakeup_fd(&mut self, fd: Option<RawFd>) {
+        self.wakeup_fd = fd;
+    }
+
+    /// The wakeup fd registered on this reader, if any.
+    pub fn wakeup_fd(&self) -> Option<RawFd> {
+        self.wakeup_fd
     }
 
     /// Return a pending resize event if a `SIGWINCH` fired since last checked.
@@ -416,7 +453,8 @@ impl TtyReader {
         } else {
             timeout
         };
-        if poll_readable(self.stdin_fd, wait) {
+        let (stdin_ready, _) = poll_readable_with_wakeup(self.stdin_fd, self.wakeup_fd, wait);
+        if stdin_ready {
             self.drain_stdin();
         } else {
             // stdin idle for the whole wait: a buffered lone `ESC` is now
@@ -443,6 +481,7 @@ impl TtyReader {
             parser: InputParser::new(),
             queue: VecDeque::new(),
             stdin_fd: fd,
+            wakeup_fd: None,
         }
     }
 }

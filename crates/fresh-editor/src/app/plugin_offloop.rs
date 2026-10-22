@@ -47,7 +47,7 @@ use crate::services::runtime::LiveRuntime;
 /// is needed to prove it is alive at the moment of spawning.
 pub(crate) struct OffLoop {
     pub filesystem: Arc<dyn FileSystem + Send + Sync>,
-    pub sender: std::sync::mpsc::Sender<AsyncMessage>,
+    pub sender: crate::services::async_bridge::AsyncSender,
     /// Set when nobody is waiting for the work any more. It is the machine
     /// handle's flag (`OpenMachine::cancel`), so closing the handle stops the
     /// work. Work with no handle gets a flag nothing ever sets.
@@ -800,8 +800,8 @@ mod tests {
             &runtime,
             OffLoop {
                 filesystem: Arc::new(StdFileSystem),
-                sender: tx,
-                cancel,
+                sender: tx.into(),
+                cancel: Arc::clone(&cancel),
             },
             ProjectSearch {
                 pattern: "NEEDLE".to_string(),
@@ -904,7 +904,7 @@ mod tests {
             &runtime,
             OffLoop {
                 filesystem: Arc::new(StdFileSystem),
-                sender: tx,
+                sender: tx.into(),
                 cancel: Arc::default(),
             },
             BaselineLoadRequest {
@@ -983,7 +983,7 @@ mod tests {
             &runtime,
             OffLoop {
                 filesystem: Arc::new(StdFileSystem),
-                sender: tx,
+                sender: tx.into(),
                 cancel: Arc::default(),
             },
             BaselineLoadRequest {

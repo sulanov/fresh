@@ -2515,7 +2515,10 @@ impl Window {
         // manager is wired to the window's own channel and present by
         // construction (see `build_window_lsp`). `&root`/`&resources`
         // are borrowed here, then moved into the struct below.
-        let bridge = crate::services::async_bridge::AsyncBridge::new();
+        let bridge = match resources.async_bridge.as_ref().and_then(|b| b.wakeup_notifier()) {
+            Some(notifier) => crate::services::async_bridge::AsyncBridge::with_notifier(notifier),
+            None => crate::services::async_bridge::AsyncBridge::new(),
+        };
         let lsp = build_window_lsp(id, &root, &connection.authority, &resources, &bridge);
         // The match toggles a search starts on, before any workspace
         // restore has a say.
